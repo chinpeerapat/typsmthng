@@ -5,6 +5,7 @@ import type { CustomFontDirectory } from '@/lib/custom-fonts'
 import {
   loadSavedDirectories,
   addFontDirectory,
+  addFontFiles,
   removeFontDirectory,
   refreshFontDirectory,
   loadAllCustomFontData,
@@ -58,6 +59,7 @@ interface SettingsState extends Settings {
   setGoogleFontsEnabled: (enabled: boolean) => void
   setSettingsOpen: (open: boolean) => void
   addCustomFontDirectory: () => Promise<CustomFontDirectory | null>
+  addCustomFontFiles: () => Promise<CustomFontDirectory | null>
   removeCustomFontDirectory: (id: string) => Promise<void>
   refreshCustomFontDirectory: (id: string) => Promise<void>
   loadSettings: () => Promise<void>
@@ -170,6 +172,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   addCustomFontDirectory: async () => {
     const dir = await addFontDirectory()
+    if (!dir) return null
+    const dirs = [...get().customFontDirectories, dir]
+    const data = await loadAllCustomFontData(dirs)
+    set({ customFontDirectories: dirs, customFontData: data })
+    return dir
+  },
+
+  addCustomFontFiles: async () => {
+    const dir = await addFontFiles()
     if (!dir) return null
     const dirs = [...get().customFontDirectories, dir]
     const data = await loadAllCustomFontData(dirs)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { X, FolderPlus, Trash2, RefreshCw } from 'lucide-react'
+import { X, FolderPlus, FilePlus, Trash2, RefreshCw } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSettingsStore, PAGE_SIZE_OPTIONS } from '@/stores/settings-store'
 import { useEditorStore } from '@/stores/editor-store'
@@ -281,6 +281,7 @@ export function SettingsModal() {
     googleFontsEnabled, setGoogleFontsEnabled,
     customFontDirectories,
     addCustomFontDirectory,
+    addCustomFontFiles,
     removeCustomFontDirectory,
     refreshCustomFontDirectory,
   } = useSettingsStore(useShallow((s) => ({
@@ -297,6 +298,7 @@ export function SettingsModal() {
     googleFontsEnabled: s.googleFontsEnabled, setGoogleFontsEnabled: s.setGoogleFontsEnabled,
     customFontDirectories: s.customFontDirectories,
     addCustomFontDirectory: s.addCustomFontDirectory,
+    addCustomFontFiles: s.addCustomFontFiles,
     removeCustomFontDirectory: s.removeCustomFontDirectory,
     refreshCustomFontDirectory: s.refreshCustomFontDirectory,
   })))
@@ -322,6 +324,10 @@ export function SettingsModal() {
     const dir = await addCustomFontDirectory()
     if (dir) forceRecompile()
   }, [addCustomFontDirectory, forceRecompile])
+  const handleAddFontFiles = useCallback(async () => {
+    const dir = await addCustomFontFiles()
+    if (dir) forceRecompile()
+  }, [addCustomFontFiles, forceRecompile])
   const handleRemoveFontDirectory = useCallback(async (id: string) => {
     await removeCustomFontDirectory(id)
     forceRecompile()
@@ -559,36 +565,68 @@ export function SettingsModal() {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleAddFontDirectory}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
-                letterSpacing: '0.02em',
-                padding: '5px 12px',
-                border: '1px solid var(--border-default)',
-                borderRadius: '2px',
-                background: 'var(--bg-inset)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'background 100ms ease, color 100ms ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--bg-hover)'
-                e.currentTarget.style.color = 'var(--text-primary)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--bg-inset)'
-                e.currentTarget.style.color = 'var(--text-secondary)'
-              }}
-            >
-              <FolderPlus size={12} />
-              Add Font Directory
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleAddFontFiles}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  letterSpacing: '0.02em',
+                  padding: '5px 12px',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: '2px',
+                  background: 'var(--bg-inset)',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'background 100ms ease, color 100ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-hover)'
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-inset)'
+                  e.currentTarget.style.color = 'var(--text-secondary)'
+                }}
+              >
+                <FilePlus size={12} />
+                Add Font Files
+              </button>
+              <button
+                type="button"
+                onClick={handleAddFontDirectory}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  letterSpacing: '0.02em',
+                  padding: '5px 12px',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: '2px',
+                  background: 'var(--bg-inset)',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'background 100ms ease, color 100ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-hover)'
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-inset)'
+                  e.currentTarget.style.color = 'var(--text-secondary)'
+                }}
+              >
+                <FolderPlus size={12} />
+                Add Directory
+              </button>
+            </div>
           </div>
 
           <SectionLabel>Compiler</SectionLabel>

@@ -132,6 +132,55 @@ export async function addFontDirectory(): Promise<CustomFontDirectory | null> {
   return meta
 }
 
+export function addFontFiles(): Promise<CustomFontDirectory | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.accept = '.ttf,.otf,.woff,.woff2,.ttc'
+
+    input.addEventListener('change', async () => {
+      const files = input.files
+      if (!files || files.length === 0) {
+        resolve(null)
+        return
+      }
+
+      const fontData: Uint8Array[] = []
+      for (let i = 0; i < files.length; i++) {
+        fontData.push(new Uint8Array(await files[i].arrayBuffer()))
+      }
+
+      if (fontData.length === 0) {
+        resolve(null)
+        return
+      }
+
+      const id = generateId()
+      const label = files.length === 1
+        ? files[0].name
+        : `${files.length} font files`
+
+      const meta: CustomFontDirectory = {
+        id,
+        name: label,
+        path: label,
+        fontCount: fontData.length,
+      }
+
+      const dirs = await getPersistedDirectories()
+      dirs.push({ meta, handle: null as unknown as FileSystemDirectoryHandle })
+      await setPersistedDirectories(dirs)
+      await idbSet(fontDataKey(id), fontData, fontsDb)
+
+      resolve(meta)
+    })
+
+    input.addEventListener('cancel', () => resolve(null))
+    input.click()
+  })
+}
+
 export async function removeFontDirectory(id: string): Promise<void> {
   const dirs = await getPersistedDirectories()
   const filtered = dirs.filter((d) => d.meta.id !== id)
