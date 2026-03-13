@@ -6,6 +6,7 @@ interface LocalFontDescriptor {
 interface DeclaredFontsOptions {
   systemFontsEnabled: boolean
   googleFontsEnabled: boolean
+  customFontData?: Uint8Array[]
 }
 
 interface DeclaredFontDataResult {
@@ -259,8 +260,9 @@ export async function loadDeclaredFontData(
   extraFiles: Array<{ path: string; content: string }> | undefined,
   options: DeclaredFontsOptions,
 ): Promise<DeclaredFontDataResult> {
+  const customData = options.customFontData ?? []
   const families = extractTypstFontFamilies(source, extraFiles)
-  if (families.length === 0) {
+  if (families.length === 0 && customData.length === 0) {
     return { key: '', data: [] }
   }
 
@@ -277,9 +279,13 @@ export async function loadDeclaredFontData(
   const keyParts = []
   if (systemFonts.key) keyParts.push(`system:${systemFonts.key}`)
   if (googleFonts.key) keyParts.push(`google:${googleFonts.key}`)
+  if (customData.length > 0) {
+    const totalBytes = customData.reduce((sum, buf) => sum + buf.byteLength, 0)
+    keyParts.push(`custom:${customData.length}:${totalBytes}`)
+  }
 
   return {
     key: keyParts.join('|'),
-    data: [...systemFonts.data, ...googleFonts.data],
+    data: [...customData, ...systemFonts.data, ...googleFonts.data],
   }
 }

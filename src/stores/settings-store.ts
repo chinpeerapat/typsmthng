@@ -1,6 +1,14 @@
 import { create } from 'zustand'
 import { get as idbGet, set as idbSet, createStore } from 'idb-keyval'
 import { useUIStore } from './ui-store'
+import type { CustomFontDirectory } from '@/lib/custom-fonts'
+import {
+  loadSavedDirectories,
+  addFontDirectory,
+  removeFontDirectory,
+  refreshFontDirectory,
+  loadAllCustomFontData,
+} from '@/lib/custom-fonts'
 
 const settingsDb = createStore('typsmthng-settings', 'settings')
 const SETTINGS_KEY = 'user-settings'
@@ -36,6 +44,8 @@ interface Settings {
 
 interface SettingsState extends Settings {
   settingsOpen: boolean
+  customFontDirectories: CustomFontDirectory[]
+  customFontData: Uint8Array[]
   setFontSize: (size: number) => void
   setAutoCompile: (enabled: boolean) => void
   setCompileDelay: (ms: number) => void
@@ -47,6 +57,9 @@ interface SettingsState extends Settings {
   setSystemFontsEnabled: (enabled: boolean) => void
   setGoogleFontsEnabled: (enabled: boolean) => void
   setSettingsOpen: (open: boolean) => void
+  addCustomFontDirectory: () => Promise<CustomFontDirectory | null>
+  removeCustomFontDirectory: (id: string) => Promise<void>
+  refreshCustomFontDirectory: (id: string) => Promise<void>
   loadSettings: () => Promise<void>
 }
 
@@ -97,6 +110,8 @@ function getPersistedFields(state: SettingsState): Settings {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...defaults,
   settingsOpen: false,
+  customFontDirectories: [],
+  customFontData: [],
 
   setFontSize: (fontSize) => {
     const clamped = Math.min(24, Math.max(12, fontSize))
@@ -153,6 +168,30 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
 
+  addCustomFontDirectory: async () => {
+    const dir = await addFontDirectory()
+    if (!dir) return null
+    const dirs = [...get().customFontDirectories, dir]
+    const data = await loadAllCustomFontData(dirs)
+    set({ customFontDirectories: dirs, customFontData: data })
+    return dir
+  },
+
+  removeCustomFontDirectory: async (id) => {
+    await removeFontDirectory(id)
+    const dirs = get().customFontDirectories.filter((d) => d.id !== id)
+    const data = await loadAllCustomFontData(dirs)
+    set({ customFontDirectories: dirs, customFontData: data })
+  },
+
+  refreshCustomFontDirectory: async (id) => {
+    const updated = await refreshFontDirectory(id)
+    if (!updated) return
+    const dirs = get().customFontDirectories.map((d) => (d.id === id ? updated : d))
+    const data = await loadAllCustomFontData(dirs)
+    set({ customFontDirectories: dirs, customFontData: data })
+  },
+
   loadSettings: async () => {
     try {
       const saved = await idbGet<Settings>(SETTINGS_KEY, settingsDb)
@@ -173,6 +212,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       }
     } catch (err) {
       console.warn('Failed to load settings from IDB, using defaults:', err)
+    }
+
+    // Load custom font directories
+    try {
+      const dirs = await loadSavedDirectories()
+      if (dirs.length > 0) {
+        const data = await loadAllCustomFontData(dirs)
+        set({ customFontDirectories: dirs, customFontData: data })
+      }
+    } catch (err) {
+      console.warn('Failed to load custom font directories:', err)
     }
   },
 }))

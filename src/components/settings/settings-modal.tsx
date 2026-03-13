@@ -1,11 +1,13 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { X } from 'lucide-react'
+import { X, FolderPlus, Trash2, RefreshCw } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSettingsStore, PAGE_SIZE_OPTIONS } from '@/stores/settings-store'
 import { useEditorStore } from '@/stores/editor-store'
 import { useProjectStore } from '@/stores/project-store'
 import type { PageSize } from '@/stores/settings-store'
 import { forceCompile } from '@/lib/compile-manager'
+import { PREDEFINED_DIRECTORIES } from '@/lib/custom-fonts'
+import type { CustomFontDirectory } from '@/lib/custom-fonts'
 
 type Theme = 'light' | 'dark' | 'system'
 
@@ -160,6 +162,110 @@ function ThemeSegment({ value, onChange }: { value: Theme; onChange: (v: Theme) 
   )
 }
 
+function FontDirectoryRow({
+  dir,
+  onRemove,
+  onRefresh,
+}: {
+  dir: CustomFontDirectory
+  onRemove: (id: string) => void
+  onRefresh: (id: string) => void
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '6px 8px',
+        background: 'var(--bg-inset)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: '2px',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '11px',
+            color: 'var(--text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {dir.name}
+        </div>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '10px',
+            color: 'var(--text-tertiary)',
+          }}
+        >
+          {dir.fontCount} font{dir.fontCount !== 1 ? 's' : ''}
+        </div>
+      </div>
+      <button
+        type="button"
+        title="Refresh fonts from this directory"
+        onClick={() => onRefresh(dir.id)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '24px',
+          height: '24px',
+          border: '1px solid transparent',
+          borderRadius: '2px',
+          background: 'transparent',
+          color: 'var(--text-tertiary)',
+          cursor: 'pointer',
+          padding: 0,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = 'var(--text-primary)'
+          e.currentTarget.style.background = 'var(--bg-hover)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'var(--text-tertiary)'
+          e.currentTarget.style.background = 'transparent'
+        }}
+      >
+        <RefreshCw size={12} />
+      </button>
+      <button
+        type="button"
+        title="Remove this font directory"
+        onClick={() => onRemove(dir.id)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '24px',
+          height: '24px',
+          border: '1px solid transparent',
+          borderRadius: '2px',
+          background: 'transparent',
+          color: 'var(--text-tertiary)',
+          cursor: 'pointer',
+          padding: 0,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = '#e74c3c'
+          e.currentTarget.style.background = 'var(--bg-hover)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'var(--text-tertiary)'
+          e.currentTarget.style.background = 'transparent'
+        }}
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
+  )
+}
+
 export function SettingsModal() {
   const {
     open, setOpen,
@@ -185,6 +291,10 @@ export function SettingsModal() {
     pageSize: s.pageSize, setPageSize: s.setPageSize,
     systemFontsEnabled: s.systemFontsEnabled, setSystemFontsEnabled: s.setSystemFontsEnabled,
     googleFontsEnabled: s.googleFontsEnabled, setGoogleFontsEnabled: s.setGoogleFontsEnabled,
+    customFontDirectories: s.customFontDirectories,
+    addCustomFontDirectory: s.addCustomFontDirectory,
+    removeCustomFontDirectory: s.removeCustomFontDirectory,
+    refreshCustomFontDirectory: s.refreshCustomFontDirectory,
   })))
 
   const backdropRef = useRef<HTMLDivElement>(null)
@@ -204,6 +314,18 @@ export function SettingsModal() {
     setGoogleFontsEnabled(enabled)
     forceRecompile()
   }, [forceRecompile, setGoogleFontsEnabled])
+  const handleAddFontDirectory = useCallback(async () => {
+    const dir = await addCustomFontDirectory()
+    if (dir) forceRecompile()
+  }, [addCustomFontDirectory, forceRecompile])
+  const handleRemoveFontDirectory = useCallback(async (id: string) => {
+    await removeCustomFontDirectory(id)
+    forceRecompile()
+  }, [removeCustomFontDirectory, forceRecompile])
+  const handleRefreshFontDirectory = useCallback(async (id: string) => {
+    await refreshCustomFontDirectory(id)
+    forceRecompile()
+  }, [refreshCustomFontDirectory, forceRecompile])
 
   useEffect(() => {
     if (!open) return
@@ -385,6 +507,85 @@ export function SettingsModal() {
           >
             <Toggle checked={googleFontsEnabled} onChange={handleGoogleFontsChange} />
           </SettingRow>
+
+          <SectionLabel>Custom Fonts</SectionLabel>
+
+          <div style={{ padding: '8px 0' }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                color: 'var(--text-tertiary)',
+                marginBottom: '8px',
+              }}
+            >
+              Add local font directories (e.g. Adobe Fonts). All fonts in the directory will be available to the compiler.
+            </div>
+
+            {customFontDirectories.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                {customFontDirectories.map((dir) => (
+                  <FontDirectoryRow
+                    key={dir.id}
+                    dir={dir}
+                    onRemove={handleRemoveFontDirectory}
+                    onRefresh={handleRefreshFontDirectory}
+                  />
+                ))}
+              </div>
+            )}
+
+            {PREDEFINED_DIRECTORIES.length > 0 && customFontDirectories.length === 0 && (
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '10px',
+                  color: 'var(--text-tertiary)',
+                  padding: '6px 8px',
+                  background: 'var(--bg-inset)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '2px',
+                  marginBottom: '8px',
+                }}
+              >
+                <div style={{ marginBottom: '4px', fontWeight: 600 }}>Adobe font paths (macOS):</div>
+                {PREDEFINED_DIRECTORIES.map((d) => (
+                  <div key={d.path} style={{ opacity: 0.8 }}>{d.path}</div>
+                ))}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAddFontDirectory}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                letterSpacing: '0.02em',
+                padding: '5px 12px',
+                border: '1px solid var(--border-default)',
+                borderRadius: '2px',
+                background: 'var(--bg-inset)',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'background 100ms ease, color 100ms ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-hover)'
+                e.currentTarget.style.color = 'var(--text-primary)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--bg-inset)'
+                e.currentTarget.style.color = 'var(--text-secondary)'
+              }}
+            >
+              <FolderPlus size={12} />
+              Add Font Directory
+            </button>
+          </div>
 
           <SectionLabel>Compiler</SectionLabel>
 
