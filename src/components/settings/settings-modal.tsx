@@ -279,6 +279,10 @@ export function SettingsModal() {
     pageSize, setPageSize,
     systemFontsEnabled, setSystemFontsEnabled,
     googleFontsEnabled, setGoogleFontsEnabled,
+    customFontDirectories,
+    addCustomFontDirectory,
+    removeCustomFontDirectory,
+    refreshCustomFontDirectory,
   } = useSettingsStore(useShallow((s) => ({
     open: s.settingsOpen, setOpen: s.setSettingsOpen,
     fontSize: s.fontSize, setFontSize: s.setFontSize,

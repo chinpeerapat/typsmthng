@@ -45,13 +45,14 @@ async function scanDirectoryForFonts(
   const fontData: Uint8Array[] = []
 
   async function walk(dir: FileSystemDirectoryHandle): Promise<void> {
-    for await (const entry of dir.values()) {
+    const entries = dir as unknown as AsyncIterable<FileSystemHandle>
+    for await (const entry of entries) {
       if (entry.kind === 'file') {
         const name = entry.name.toLowerCase()
         const ext = name.slice(name.lastIndexOf('.'))
         if (FONT_EXTENSIONS.has(ext)) {
           try {
-            const file = await entry.getFile()
+            const file = await (entry as FileSystemFileHandle).getFile()
             fontData.push(new Uint8Array(await file.arrayBuffer()))
           } catch {
             // skip unreadable files
@@ -59,7 +60,7 @@ async function scanDirectoryForFonts(
         }
       } else if (entry.kind === 'directory') {
         try {
-          await walk(entry)
+          await walk(entry as FileSystemDirectoryHandle)
         } catch {
           // skip inaccessible subdirectories
         }
@@ -89,14 +90,17 @@ export async function loadSavedDirectories(): Promise<CustomFontDirectory[]> {
 }
 
 export async function addFontDirectory(): Promise<CustomFontDirectory | null> {
-  if (!('showDirectoryPicker' in window)) {
+  const showDirectoryPicker = (window as unknown as {
+    showDirectoryPicker?: (options?: { mode?: string }) => Promise<FileSystemDirectoryHandle>
+  }).showDirectoryPicker
+  if (!showDirectoryPicker) {
     console.warn('File System Access API not supported')
     return null
   }
 
   let handle: FileSystemDirectoryHandle
   try {
-    handle = await window.showDirectoryPicker({ mode: 'read' })
+    handle = await showDirectoryPicker({ mode: 'read' })
   } catch {
     return null // user cancelled
   }
@@ -141,7 +145,10 @@ export async function refreshFontDirectory(id: string): Promise<CustomFontDirect
   if (!entry) return null
 
   try {
-    const permission = await entry.handle.requestPermission({ mode: 'read' })
+    const requestPermission = (entry.handle as unknown as {
+      requestPermission: (opts: { mode: string }) => Promise<string>
+    }).requestPermission
+    const permission = await requestPermission.call(entry.handle, { mode: 'read' })
     if (permission !== 'granted') return null
   } catch {
     return null
