@@ -86,11 +86,7 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined
           if (id.includes('unified-latex') || id.includes('pegjs')) return 'latex-converter'
           if (id.includes('@replit/codemirror-vim')) return 'editor-vim'
-          if (id.includes('codemirror-lang-typst')) return 'editor-typst'
-          if (id.includes('@codemirror/lang-') || id.includes('@lezer')) return 'editor-language'
-          if (id.includes('@codemirror') || id.includes('/codemirror/')) return 'editor-core'
-          if (id.includes('react') || id.includes('scheduler')) return 'react-core'
-          return 'vendor'
+          return undefined
         },
       },
     },
