@@ -58,11 +58,12 @@ async function ensureCompilerConfig(
   source?: string,
   extraFiles?: Array<{ path: string; content: string }>,
 ): Promise<void> {
-  const { systemFontsEnabled, googleFontsEnabled } = useSettingsStore.getState()
+  const { systemFontsEnabled, googleFontsEnabled, customFontData } = useSettingsStore.getState()
   const { key, data } = source
     ? await loadDeclaredFontData(source, extraFiles, {
       systemFontsEnabled,
       googleFontsEnabled,
+      customFontData,
     })
     : { key: '', data: [] as Uint8Array[] }
 

@@ -1,0 +1,231 @@
+import { get as idbGet, set as idbSet, del as idbDel, createStore } from 'idb-keyval'
+
+const FONT_EXTENSIONS = new Set(['.ttf', '.otf', '.woff', '.woff2', '.ttc'])
+const fontsDb = createStore('typsmthng-custom-fonts', 'fonts')
+const DIRECTORIES_KEY = 'font-directories'
+
+export interface CustomFontDirectory {
+  id: string
+  name: string
+  path: string
+  fontCount: number
+}
+
+interface PersistedDirectory {
+  meta: CustomFontDirectory
+  handle: FileSystemDirectoryHandle
+}
+
+export const PREDEFINED_DIRECTORIES: { name: string; path: string }[] = [
+  {
+    name: 'Adobe Fonts (activated)',
+    path: '~/Library/Application Support/Adobe/CoreSync/plugins/livetype/.r',
+  },
+  {
+    name: 'Adobe Fonts (syncing)',
+    path: '~/Library/Application Support/Adobe/CoreSync/plugins/livetype/.w',
+  },
+  {
+    name: 'Adobe User Owned Fonts',
+    path: '~/Library/Application Support/Adobe/.User Owned Fonts/',
+  },
+]
+
+function generateId(): string {
+  return `dir_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+function fontDataKey(directoryId: string): string {
+  return `font-data:${directoryId}`
+}
+
+async function scanDirectoryForFonts(
+  handle: FileSystemDirectoryHandle,
+): Promise<Uint8Array[]> {
+  const fontData: Uint8Array[] = []
+
+  async function walk(dir: FileSystemDirectoryHandle): Promise<void> {
+    const entries = dir as unknown as AsyncIterable<FileSystemHandle>
+    for await (const entry of entries) {
+      if (entry.kind === 'file') {
+        const name = entry.name.toLowerCase()
+        const ext = name.slice(name.lastIndexOf('.'))
+        if (FONT_EXTENSIONS.has(ext)) {
+          try {
+            const file = await (entry as FileSystemFileHandle).getFile()
+            fontData.push(new Uint8Array(await file.arrayBuffer()))
+          } catch {
+            // skip unreadable files
+          }
+        }
+      } else if (entry.kind === 'directory') {
+        try {
+          await walk(entry as FileSystemDirectoryHandle)
+        } catch {
+          // skip inaccessible subdirectories
+        }
+      }
+    }
+  }
+
+  await walk(handle)
+  return fontData
+}
+
+async function getPersistedDirectories(): Promise<PersistedDirectory[]> {
+  try {
+    return (await idbGet<PersistedDirectory[]>(DIRECTORIES_KEY, fontsDb)) ?? []
+  } catch {
+    return []
+  }
+}
+
+async function setPersistedDirectories(dirs: PersistedDirectory[]): Promise<void> {
+  await idbSet(DIRECTORIES_KEY, dirs, fontsDb)
+}
+
+export async function loadSavedDirectories(): Promise<CustomFontDirectory[]> {
+  const dirs = await getPersistedDirectories()
+  return dirs.map((d) => d.meta)
+}
+
+export async function addFontDirectory(): Promise<CustomFontDirectory | null> {
+  const showDirectoryPicker = (window as unknown as {
+    showDirectoryPicker?: (options?: { mode?: string }) => Promise<FileSystemDirectoryHandle>
+  }).showDirectoryPicker
+  if (!showDirectoryPicker) {
+    console.warn('File System Access API not supported')
+    return null
+  }
+
+  let handle: FileSystemDirectoryHandle
+  try {
+    handle = await showDirectoryPicker({ mode: 'read' })
+  } catch {
+    return null // user cancelled
+  }
+
+  const fontData = await scanDirectoryForFonts(handle)
+  if (fontData.length === 0) {
+    return null
+  }
+
+  const id = generateId()
+
+  // Try to get a display path by resolving against a parent
+  // The handle.name gives us the directory name
+  const meta: CustomFontDirectory = {
+    id,
+    name: handle.name,
+    path: handle.name,
+    fontCount: fontData.length,
+  }
+
+  // Persist handle + metadata
+  const dirs = await getPersistedDirectories()
+  dirs.push({ meta, handle })
+  await setPersistedDirectories(dirs)
+
+  // Persist font data separately
+  await idbSet(fontDataKey(id), fontData, fontsDb)
+
+  return meta
+}
+
+export function addFontFiles(): Promise<CustomFontDirectory | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.accept = '.ttf,.otf,.woff,.woff2,.ttc'
+
+    input.addEventListener('change', async () => {
+      const files = input.files
+      if (!files || files.length === 0) {
+        resolve(null)
+        return
+      }
+
+      const fontData: Uint8Array[] = []
+      for (let i = 0; i < files.length; i++) {
+        fontData.push(new Uint8Array(await files[i].arrayBuffer()))
+      }
+
+      if (fontData.length === 0) {
+        resolve(null)
+        return
+      }
+
+      const id = generateId()
+      const label = files.length === 1
+        ? files[0].name
+        : `${files.length} font files`
+
+      const meta: CustomFontDirectory = {
+        id,
+        name: label,
+        path: label,
+        fontCount: fontData.length,
+      }
+
+      const dirs = await getPersistedDirectories()
+      dirs.push({ meta, handle: null as unknown as FileSystemDirectoryHandle })
+      await setPersistedDirectories(dirs)
+      await idbSet(fontDataKey(id), fontData, fontsDb)
+
+      resolve(meta)
+    })
+
+    input.addEventListener('cancel', () => resolve(null))
+    input.click()
+  })
+}
+
+export async function removeFontDirectory(id: string): Promise<void> {
+  const dirs = await getPersistedDirectories()
+  const filtered = dirs.filter((d) => d.meta.id !== id)
+  await setPersistedDirectories(filtered)
+  await idbDel(fontDataKey(id), fontsDb).catch(() => {})
+}
+
+export async function refreshFontDirectory(id: string): Promise<CustomFontDirectory | null> {
+  const dirs = await getPersistedDirectories()
+  const entry = dirs.find((d) => d.meta.id === id)
+  if (!entry) return null
+
+  try {
+    const requestPermission = (entry.handle as unknown as {
+      requestPermission: (opts: { mode: string }) => Promise<string>
+    }).requestPermission
+    const permission = await requestPermission.call(entry.handle, { mode: 'read' })
+    if (permission !== 'granted') return null
+  } catch {
+    return null
+  }
+
+  const fontData = await scanDirectoryForFonts(entry.handle)
+  entry.meta.fontCount = fontData.length
+  await setPersistedDirectories(dirs)
+  await idbSet(fontDataKey(id), fontData, fontsDb)
+
+  return entry.meta
+}
+
+export async function loadAllCustomFontData(
+  directories: CustomFontDirectory[],
+): Promise<Uint8Array[]> {
+  if (directories.length === 0) return []
+
+  const allData: Uint8Array[] = []
+  for (const dir of directories) {
+    try {
+      const data = await idbGet<Uint8Array[]>(fontDataKey(dir.id), fontsDb)
+      if (data) {
+        allData.push(...data)
+      }
+    } catch {
+      // skip failed loads
+    }
+  }
+  return allData
+}
